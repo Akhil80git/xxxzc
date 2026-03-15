@@ -2,27 +2,12 @@ require("dotenv").config()
 
 const express = require("express")
 const cors = require("cors")
-const mongoose = require("mongoose")
 const Groq = require("groq-sdk")
 
 const app = express()
 
 app.use(cors())
 app.use(express.json())
-
-/* ---------------- MongoDB ---------------- */
-
-mongoose.connect(process.env.MONGO_URI)
-.then(()=>console.log("✅ MongoDB Connected"))
-.catch(err=>console.log(err))
-
-const chatSchema = new mongoose.Schema({
-question:String,
-answer:String,
-date:{type:Date,default:Date.now}
-})
-
-const Chat = mongoose.model("Chat",chatSchema)
 
 /* ---------------- Groq ---------------- */
 
@@ -40,6 +25,8 @@ res.send(`
 <html>
 <head>
 
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
 <title>AI Chat</title>
 
 <style>
@@ -50,81 +37,49 @@ font-family:Arial;
 background:#0f172a;
 color:white;
 display:flex;
+flex-direction:column;
 height:100vh;
-overflow:hidden;
 }
 
-/* Sidebar */
-
-.sidebar{
-width:260px;
-background:#020617;
-padding:20px;
-display:flex;
-flex-direction:column;
-border-right:1px solid #334155;
-}
-
-.logo{
-font-size:20px;
-margin-bottom:20px;
-}
-
-.newchat{
-padding:12px;
-background:#2563eb;
-border:none;
-color:white;
-border-radius:8px;
-cursor:pointer;
-}
-
-.newchat:hover{
-background:#1d4ed8;
-}
-
-.history{
-margin-top:20px;
-flex:1;
-overflow:auto;
-}
-
-/* Chat Area */
-
-.main{
-flex:1;
-display:flex;
-flex-direction:column;
-}
+/* Top Bar */
 
 .topbar{
-display:none;
 background:#020617;
 padding:15px;
+display:flex;
+justify-content:space-between;
+align-items:center;
 border-bottom:1px solid #334155;
 }
 
-.menu{
-font-size:24px;
+.topbar button{
+padding:8px 14px;
+background:#2563eb;
+border:none;
+color:white;
+border-radius:6px;
 cursor:pointer;
 }
+
+/* Chat */
 
 #chat{
 flex:1;
 overflow-y:auto;
-padding:30px;
+padding:20px;
 display:flex;
 flex-direction:column;
-gap:15px;
+gap:12px;
 }
 
 /* Message */
 
 .msg{
-max-width:70%;
-padding:14px 18px;
+max-width:80%;
+padding:12px 16px;
 border-radius:10px;
 line-height:1.5;
+font-size:15px;
 }
 
 .user{
@@ -141,51 +96,44 @@ align-self:flex-start;
 
 .inputArea{
 display:flex;
-padding:20px;
+padding:12px;
 background:#020617;
 border-top:1px solid #334155;
 }
 
 .inputArea textarea{
 flex:1;
-padding:16px;
-font-size:16px;
-border-radius:10px;
+padding:12px;
 border:none;
+border-radius:8px;
 resize:none;
-height:70px;
+height:50px;
+font-size:15px;
 outline:none;
 }
 
 .inputArea button{
-margin-left:15px;
-padding:14px 30px;
+margin-left:10px;
+padding:10px 18px;
 background:#22c55e;
 border:none;
-border-radius:10px;
+border-radius:8px;
 color:white;
-font-size:16px;
+font-size:15px;
 cursor:pointer;
 }
 
-/* Mobile */
+/* Mobile Optimization */
 
-@media(max-width:768px){
+@media(max-width:600px){
 
-.sidebar{
-position:absolute;
-left:-260px;
-height:100%;
-transition:0.3s;
-z-index:10;
+.msg{
+max-width:90%;
+font-size:14px;
 }
 
-.sidebar.show{
-left:0;
-}
-
-.topbar{
-display:flex;
+.inputArea textarea{
+height:45px;
 }
 
 }
@@ -196,41 +144,45 @@ display:flex;
 
 <body>
 
-<!-- Sidebar -->
-
-<div class="sidebar" id="sidebar">
-
-<div class="logo">AI Chat</div>
-
-<button class="newchat" onclick="newChat()">+ New Chat</button>
-
-<div class="history" id="history"></div>
-
-</div>
-
-<!-- Main -->
-
-<div class="main">
+<!-- Top Bar -->
 
 <div class="topbar">
-<div class="menu" onclick="toggleMenu()">☰</div>
+
+<div>AI Chat</div>
+
+<button onclick="newChat()">New Chat</button>
+
 </div>
+
+<!-- Chat -->
 
 <div id="chat"></div>
 
+<!-- Input -->
+
 <div class="inputArea">
 
-<textarea id="msg" placeholder="Type your message..."></textarea>
+<textarea id="msg" placeholder="Type message..."></textarea>
 
 <button onclick="sendMsg()">Send</button>
-
-</div>
 
 </div>
 
 <script>
 
 const chat=document.getElementById("chat")
+
+/* Load LocalStorage */
+
+window.onload=function(){
+
+let history=JSON.parse(localStorage.getItem("chatHistory")) || []
+
+history.forEach(m=>addMsg(m.text,m.type))
+
+}
+
+/* Add Message */
 
 function addMsg(text,type){
 
@@ -246,6 +198,20 @@ chat.scrollTop=chat.scrollHeight
 
 }
 
+/* Save Local */
+
+function saveLocal(text,type){
+
+let history=JSON.parse(localStorage.getItem("chatHistory")) || []
+
+history.push({text,type})
+
+localStorage.setItem("chatHistory",JSON.stringify(history))
+
+}
+
+/* Send Message */
+
 async function sendMsg(){
 
 let msg=document.getElementById("msg").value
@@ -253,6 +219,7 @@ let msg=document.getElementById("msg").value
 if(!msg) return
 
 addMsg(msg,"user")
+saveLocal(msg,"user")
 
 document.getElementById("msg").value=""
 
@@ -271,18 +238,17 @@ body:JSON.stringify({message:msg})
 const data=await res.json()
 
 addMsg(data.reply,"ai")
+saveLocal(data.reply,"ai")
 
 }
+
+/* New Chat */
 
 function newChat(){
 
 chat.innerHTML=""
 
-}
-
-function toggleMenu(){
-
-document.getElementById("sidebar").classList.toggle("show")
+localStorage.removeItem("chatHistory")
 
 }
 
@@ -318,13 +284,6 @@ content:userMessage
 
 const aiReply = completion.choices[0].message.content
 
-const chat = new Chat({
-question:userMessage,
-answer:aiReply
-})
-
-await chat.save()
-
 res.json({reply:aiReply})
 
 }
@@ -334,16 +293,6 @@ console.log(err)
 
 res.json({reply:"AI Error"})
 }
-
-})
-
-/* ---------------- History ---------------- */
-
-app.get("/history",async(req,res)=>{
-
-const data = await Chat.find().sort({date:-1})
-
-res.json(data)
 
 })
 
